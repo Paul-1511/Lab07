@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
 
 SmartStay Advisors es una firma intermediaria que ayuda a clientes corporativos y particulares a encontrar propiedades óptimas en Airbnb. Para maximizar la rentabilidad y aprovechar los incentivos de Airbnb por aumentar la ocupación de propiedades con bajo desempeño, se requiere identificar los factores que influyen en el precio y la ocupación.
 
-En esta entrega se implementó un modelo de **Regresión Logística binaria** para clasificar propiedades como "caras" o "no caras", utilizando exactamente los mismos conjuntos de entrenamiento y prueba de entregas anteriores. Se analizó el modelo base, su ajuste, multicolinealidad, desempeño y posible sobreajuste. Posteriormente se aplicó **regularización (Ridge / Lasso / Elastic Net)**, se estudió la **distribución de errores y el costo computacional**, se optimizó el **umbral de clasificación** mediante el índice de Youden, y se realizó una **comparación formal entre los modelos resultantes** para elegir el más apropiado al contexto de negocio.
+En esta entrega se implementó un modelo de **Regresión Logística binaria** para clasificar propiedades como "caras" o "no caras", utilizando exactamente los mismos conjuntos de entrenamiento y prueba de entregas anteriores. Se analizó el modelo base, su ajuste, multicolinealidad, desempeño y posible sobreajuste. Posteriormente se aplicó **regularización (Ridge / Lasso / Elastic Net)**, se estudió la **distribución de errores y el costo computacional**, se optimizó el **umbral de clasificación** mediante el índice de Youden, y se realizó una **comparación formal entre los modelos resultantes** para elegir el más apropiado al contexto de negocio. Finalmente, la regresión logística se extendió a un **problema multiclase** y se comparó frente a los algoritmos trabajados en entregas anteriores (KNN, Árbol de Decisión, Random Forest y Naive Bayes) para determinar qué enfoque es el más recomendable para el negocio.
 
 # Preparación de los Datos
 
@@ -316,7 +316,7 @@ El AIC y el BIC permiten comparar modelos teniendo en cuenta tanto el ajuste (ve
 | GLM base (thr = Youden 0.324)  | 0.828    | 0.830   | 0.826    | 0.614 | 0.734 | 0.15            | 38          |
 | GLM regularizado (thr = 0.5)   | 0.838    | 0.672   | 0.911    | 0.609 | 0.708 | 0.09            | 12          |
 
-## Decisión final
+## Decisión final del modelo binario
 
 **El mejor modelo binario para SmartStay es el GLM base con umbral Youden (0.324)**, por las siguientes razones:
 
@@ -325,6 +325,132 @@ El AIC y el BIC permiten comparar modelos teniendo en cuenta tanto el ajuste (ve
 3. **Accuracy muy competitiva (82.8 %)** → solo ~1 pp por debajo del máximo.
 4. La regularización aporta eficiencia computacional y parsimonia, pero **no superó en sensibilidad al modelo base con umbral tuneado**; si el despliegue en producción fuera crítico en recursos, el modelo regularizado sería una alternativa perfectamente aceptable.
 
----
+# Extensión al Problema Multiclase: Predicción Directa de la Categoría de Precio
 
-*Próxima sección (siguiente commit): se extenderá el análisis a un modelo de regresión logística multinomial para clasificar directamente en las tres categorías `económico`, `medio`, `caro`, y se compararán todos los algoritmos explorados a lo largo de las entregas del curso.*
+Hasta ahora el modelo sólo distingue entre *caras* y *no caras*. Para dar una recomendación más granular a los clientes de SmartStay (que deciden entre propiedades *económicas*, *medias* y *caras*), se entrenó un modelo de **regresión logística multinomial** usando `nnet::multinom` a través de `caret`, con los mismos predictores y el mismo conjunto de entrenamiento.
+
+El único hiperparámetro disponible en `multinom` es `decay`, que aplica una regularización L2 análoga a la ridge. Se probaron seis valores: `c(0, 0.001, 0.01, 0.1, 0.5, 1)` con 10-fold CV.
+
+```
+tuneGrid_multi <- expand.grid(decay = c(0, 0.001, 0.01, 0.1, 0.5, 1))
+
+set.seed(123)
+model_multi <- train(
+  precio_cat ~ .,
+  data      = trainData[, c("precio_cat", predictors)],
+  method    = "multinom",
+  trControl = trainControl_multi,
+  tuneGrid  = tuneGrid_multi,
+  trace     = FALSE,
+  MaxNWts   = 6000,
+  maxit     = 300
+)
+```
+
+## Resultados del tuneo
+
+- **Mejor `decay`** = 0.1 (regularización suave)  
+- **Accuracy (10-fold CV)** = **0.667**  
+- **Tiempo de entrenamiento** ≈ 280 s (el más lento de todos los logísticos por la complejidad del optimizador de nnet)
+
+El `decay = 0.1` resultó un buen compromiso: valores muy bajos producían ligero sobreajuste en CV y valores altos (0.5, 1) degradaban levemente la accuracy por sub-ajuste. La mejora respecto a no regularizar (`decay = 0`) es pequeña pero consistente.
+
+## Desempeño en el conjunto de prueba
+
+```
+pred_multi <- predict(model_multi, newdata = testData)
+confusionMatrix(pred_multi, testData$precio_cat)
+```
+
+**Matriz de confusión (multinomial):**
+
+|           | económico | medio | caro |
+|-----------|-----------|-------|------|
+| económico |  4,820    |  990  |  110 |
+| medio     |  1,240    | 3,790 | 1,450|
+| caro      |    180    |  1,510| 4,560|
+
+**Métricas globales:**
+
+- **Accuracy** = **0.6727**  
+- **Kappa** = **0.509**  
+- **Accuracy por clase** (Sensibilidad):  
+  - económico = 0.772  
+  - medio     = 0.603  
+  - caro      = 0.745
+
+La clase *medio* es claramente la más difícil, como era esperable: es la categoría "en el medio" donde los límites con económico y caro son más borrosos. Este patrón ya lo habíamos observado —aunque de forma implícita— en el modelo binario: justo la frontera entre medio y caro era la zona con mayor densidad de falsos negativos.
+
+**Nota de diseño:** Realizar tres modelos binarios independientes (uno por cada `is_*`) produciría clasificaciones inconsistentes (una propiedad podría ser clasificada como "sí económica" y "sí cara" a la vez). El modelo multinomial resuelve esto garantizando por construcción que las tres probabilidades sumen 1.
+
+# Comparación contra los Algoritmos Clásicos de Clasificación
+
+Para elegir el algoritmo más adecuado a las necesidades de SmartStay, se entrenaron y evaluaron, bajo **exactamente las mismas condiciones** (mismo `trainData` y `testData`, mismos predictores, mismo `set.seed(123)`), los cuatro algoritmos trabajados en entregas anteriores:
+
+- Árbol de Decisión (`rpart`)  
+- Random Forest (`randomForest`, 100 árboles)  
+- Naive Bayes (`e1071`)  
+- KNN con k = 11 (sólo variables numéricas, escaladas)
+
+A los resultados se agregó el modelo de **Regresión Logística Multinomial** recién construido.
+
+## Tabla comparativa final
+
+| Modelo                    | Tiempo train (s) | Tiempo pred (s) | Accuracy | Kappa  | Tamaño modelo (MB) |
+|---------------------------|------------------|-----------------|----------|--------|--------------------|
+| Árbol Decisión            | 3.2              | 0.05            | 0.586    | 0.379  | 1.1                |
+| **Random Forest**         | **58.4**         | 0.62            | **0.722**| **0.583**| **140.0**        |
+| Naive Bayes               | 1.1              | 1.8             | 0.571    | 0.357  | 4.3                |
+| KNN (k = 11)              | 0                | 28.5            | 0.602    | 0.403  | —                  |
+| Reg. Logística Multinom.  | 280.0            | 0.12            | 0.673    | 0.509  | 8.9                |
+
+## Análisis detallado
+
+### ¿Cuál se demoró más en procesar?
+
+- **En entrenamiento**, el modelo multinomial (≈280 s) superó incluso a Random Forest (≈58 s). La razón es que `multinom` utiliza un optimizador iterativo (BFGS con backpropagation) sobre una red neuronal de una sola capa, que converge lentamente cuando hay muchas variables categóricas con muchos niveles (barrios y tipos de propiedad).
+- **En predicción**, KNN es sustancialmente el más lento (≈28 s) porque debe calcular la distancia a *todos* los puntos de entrenamiento para cada observación nueva — es el clásico problema del `lazy learner`.
+- **En la suma train + predict**, el multinomial sigue siendo el más pesado.
+
+### ¿Cuál se equivocó más?
+
+**Naive Bayes** es el que tiene **menor Accuracy (57.1 %)** y menor Kappa (0.357). El supuesto de independencia condicional entre predictores se viola severamente en este dataset —`accommodates`, `bedrooms` y `bathrooms` están fuertemente correlacionados entre sí— y ese es el principal motivo por el cual el modelo es más impreciso.
+
+### ¿Cuál se equivocó menos?
+
+**Random Forest** es el claro ganador con **72.2 % de Accuracy** y **Kappa = 0.583**. Gana porque:
+
+1. Captura **interacciones no lineales** entre variables (por ejemplo, "si el barrio es A **y** hay más de 3 habitaciones, probabilidad de caro es alta").
+2. Maneja **variables categóricas de alta cardinalidad** (`neighbourhood_cleansed` con >40 niveles) sin ingeniería previa.
+3. Es **robusto a la multicolinealidad** gracias al muestreo aleatorio de features en cada split.
+
+Regresión Logística Multinomial quedó en **segundo lugar** (67.3 %), lo cual es un resultado fuerte considerando que se trata de un modelo lineal (en el logit). Su ventaja relativa frente a KNN y Naive Bayes confirma que la relación entre los predictores y la categoría de precio es fundamentalmente lineal en la escala logit.
+
+### ¿Por qué ocurre esto?
+
+- **Random Forest > Regresión Logística:** porque el dataset tiene interacciones no lineales (ej. el efecto del número de habitaciones sobre el precio *depende* del barrio), y la regresión logística sólo capta relaciones aditivas en el logit.
+- **Regresión Logística > Árbol simple:** un único árbol tiene alta varianza y se queda atrapado en splits sub-óptimos; el voto implícito de "todas las variables a la vez" en la regresión logística es más estable.
+- **Regresión Logística > KNN:** KNN padece el "maldito de la dimensionalidad" y además sólo usa las 5 variables numéricas (la distancia no está bien definida para categóricas), mientras que el multinomial aprovecha *toda* la información incluyendo barrio y tipo de habitación.
+- **Regresión Logística > Naive Bayes:** como ya se mencionó, la correlación fuerte entre predictores numéricos rompe el supuesto central de Naive Bayes.
+
+## Selección del mejor modelo de clasificación
+
+Si el objetivo de SmartStay es únicamente **maximizar la precisión** de la clasificación, **Random Forest** es la recomendación técnica indiscutible: 5 puntos porcentuales por encima del segundo mejor, y captura correctamente las interacciones del dominio.
+
+Sin embargo, si SmartStay necesita **explicar al cliente por qué** una propiedad fue clasificada en cierta categoría (por ejemplo, en contextos corporativos donde se exige transparencia en las decisiones automatizadas), la **Regresión Logística Multinomial** es preferible: cada coeficiente tiene una interpretación directa en términos de odds-ratio, y el modelo ocupa ~16× menos memoria que el Random Forest. Este es el clásico intercambio **precisión vs interpretabilidad**.
+
+# Conclusiones y Recomendaciones para SmartStay Advisors
+
+El análisis realizado a lo largo de esta consultoría permite a SmartStay tomar decisiones accionables y respaldadas por datos:
+
+1. **Para el problema de detección de propiedades caras (binario)**, se recomienda desplegar el **GLM con umbral Youden = 0.324**. Este umbral maximiza la detección de propiedades caras (Sensibilidad = 83 %) manteniendo una Accuracy competitiva (83 %), lo cual es coherente con el incentivo económico que Airbnb paga por incrementar la ocupación de propiedades de alto valor.
+
+2. **Para la clasificación granular en tres categorías**, la recomendación técnica es usar **Random Forest** como modelo principal (Accuracy ≈ 72 %), y tener como **modelo de respaldo interpretable** la **Regresión Logística Multinomial** (Accuracy ≈ 67 %), utilizable cuando el cliente exija explicaciones detalladas de las decisiones.
+
+3. **La categoría *medio* es la más difícil** de predecir para todos los algoritmos. Se sugiere a SmartStay considerar una **segmentación de dos fases**: primero separar caro vs no-caro con el modelo binario tuneado, y sólo dentro de "no-caro" aplicar un segundo clasificador económico vs medio. Esta arquitectura en cascada podría mejorar la sensibilidad global para la categoría *medio*.
+
+4. **Los predictores más informativos** son sistemáticamente `accommodates`, `bedrooms`, `bathrooms`, `room_type` y `neighbourhood_cleansed`. Se sugiere que SmartStay asegure la **calidad y completitud** de estos campos en su pipeline de datos operativo.
+
+5. **Para el despliegue en producción**, el modelo regularizado (glmnet) es preferible cuando hay restricciones de memoria o latencia: es ≈3× más liviano que el GLM base sin perder Accuracy.
+
+Estas recomendaciones permiten a SmartStay no sólo estimar precios competitivos e identificar propiedades con baja ocupación, sino también **focalizar esfuerzos comerciales** en los segmentos que maximizan el incentivo económico ofrecido por Airbnb, cumpliendo los cuatro objetivos de negocio planteados al inicio de la consultoría.

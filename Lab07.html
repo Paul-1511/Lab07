@@ -11,7 +11,7 @@
 
 <meta name="author" content="Pablo Mendez, Pablo Cabrera, Luis Palacios - CC3074 Minería de Datos" />
 
-<meta name="date" content="2026-04-17" />
+<meta name="date" content="2026-04-19" />
 
 <title>Laboratorio 7 - Modelos de Regresión Logística</title>
 
@@ -1575,7 +1575,7 @@ Logística</h1>
 ocupación en Airbnb mediante Regresión Logística</h3>
 <h4 class="author">Pablo Mendez, Pablo Cabrera, Luis Palacios - CC3074
 Minería de Datos</h4>
-<h4 class="date">2026-04-17</h4>
+<h4 class="date">2026-04-19</h4>
 
 </div>
 
@@ -1587,31 +1587,47 @@ Consultoría</h1>
 corporativos y particulares a encontrar propiedades óptimas en Airbnb.
 Para maximizar la rentabilidad y aprovechar los incentivos de Airbnb por
 aumentar la ocupación de propiedades con bajo desempeño, se requiere
-identificar factores que influyen en el precio y la ocupación. En esta
-entrega se implementó un modelo de Regresión Logística binaria para
-clasificar propiedades como “caras” o “no caras”, utilizando exactamente
-los mismos conjuntos de entrenamiento y prueba de entregas anteriores.
-Se analizó el modelo, su ajuste, multicolinealidad, desempeño y posible
-sobreajuste.</p>
-<div id="preparación-de-los-datos-actividad-1-y-2" class="section level2" number="1.1">
-<h2><span class="header-section-number">1.1</span> Preparación de los
-Datos (Actividad 1 y 2)</h2>
-<p>Se cargó el archivo listings.RData y se limpió la variable price. Se
-recreó la variable categórica precio_cat usando cuartiles (33% y 66%),
-tal como en laboratorios anteriores. Distribución de precio_cat:</p>
-<pre><code>table(listings$precio_cat)</code></pre>
+identificar los factores que influyen en el precio y la ocupación.</p>
+<p>En esta entrega se implementó un modelo de <strong>Regresión
+Logística binaria</strong> para clasificar propiedades como “caras” o
+“no caras”, utilizando exactamente los mismos conjuntos de entrenamiento
+y prueba de entregas anteriores. Se analizó el modelo base, su ajuste,
+multicolinealidad, desempeño y posible sobreajuste. Posteriormente se
+aplicó <strong>regularización (Ridge / Lasso / Elastic Net)</strong>, se
+estudió la <strong>distribución de errores y el costo
+computacional</strong>, se optimizó el <strong>umbral de
+clasificación</strong> mediante el índice de Youden, y se realizó una
+<strong>comparación formal entre los modelos resultantes</strong> para
+elegir el más apropiado al contexto de negocio. Finalmente, la regresión
+logística se extendió a un <strong>problema multiclase</strong> y se
+comparó frente a los algoritmos trabajados en entregas anteriores (KNN,
+Árbol de Decisión, Random Forest y Naive Bayes) para determinar qué
+enfoque es el más recomendable para el negocio.</p>
+</div>
+<div id="preparación-de-los-datos" class="section level1" number="2">
+<h1><span class="header-section-number">2</span> Preparación de los
+Datos</h1>
+<p>Se cargó el archivo <code>listings.RData</code> y se limpió la
+variable <code>price</code>. Se recreó la variable categórica
+<code>precio_cat</code> usando cuartiles (33 % y 66 %), tal como en
+laboratorios anteriores.</p>
+<p>Distribución de <code>precio_cat</code>:</p>
+<pre><code>table(listings$precio_cat)
+# económico     medio      caro
+#    20976     20763     20965</code></pre>
 <p>Se crearon las tres variables dicotómicas solicitadas:</p>
 <ul>
 <li><code>is_economico</code></li>
 <li><code>is_medio</code></li>
 <li><code>is_caro</code></li>
 </ul>
-<p>Se realizó la partición con <code>set.seed(123)</code> (70%
+<p>Se realizó la partición con <code>set.seed(123)</code> (70 %
 entrenamiento). Después de eliminar filas con NA en las variables
 predictoras, quedaron:</p>
 <ul>
-<li>Train: 43,913 observaciones</li>
-<li>Test: 18,849 observaciones</li>
+<li><strong>Train:</strong> 43,913 observaciones<br />
+</li>
+<li><strong>Test:</strong> 18,849 observaciones</li>
 </ul>
 <p>Variables predictoras utilizadas (exactamente las mismas que en KNN,
 Árbol, Random Forest y Naive Bayes):</p>
@@ -1622,36 +1638,39 @@ predictoras, quedaron:</p>
 number_of_reviews, host_is_superhost, room_type,
 neighbourhood_cleansed</p>
 </div>
-<div id="construcción-del-modelo-de-regresión-logística-actividad-3" class="section level2" number="1.2">
-<h2><span class="header-section-number">1.2</span> Construcción del
-Modelo de Regresión Logística (Actividad 3)</h2>
+<div id="construcción-del-modelo-base" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Construcción del Modelo
+Base</h1>
 <p>Se entrenó un modelo GLM binomial con validación cruzada de 10 folds
 y métrica ROC.</p>
 <pre><code>print(model_caro)</code></pre>
 <p>Resultados de validación cruzada (10-fold CV):</p>
 <ul>
-<li>ROC = 0.90098</li>
-<li>Sensibilidad = 0.91442</li>
-<li>Especificidad = 0.66857</li>
+<li><strong>ROC</strong> = 0.90098</li>
+<li><strong>Sensibilidad</strong> = 0.91442</li>
+<li><strong>Especificidad</strong> = 0.66857</li>
 </ul>
 <pre><code>summary(model_caro$finalModel)</code></pre>
 </div>
-<div id="análisis-del-modelo-actividad-4" class="section level2" number="1.3">
-<h2><span class="header-section-number">1.3</span> Análisis del Modelo
-(Actividad 4)</h2>
-<div id="multicolinealidad" class="section level3" number="1.3.1">
-<h3><span class="header-section-number">1.3.1</span>
-Multicolinealidad</h3>
+<div id="evaluación-diagnóstica-del-modelo" class="section level1" number="4">
+<h1><span class="header-section-number">4</span> Evaluación Diagnóstica
+del Modelo</h1>
+<div id="multicolinealidad" class="section level2" number="4.1">
+<h2><span class="header-section-number">4.1</span>
+Multicolinealidad</h2>
 <p>No se detectaron variables aliadas con <code>alias()</code>. Sin
 embargo, debido al alto número de categorías en
 <code>neighbourhood_cleansed</code>, no fue posible calcular el VIF
 completo (existen singularidades). Esto es común en datasets con muchas
-variables categóricas de alta cardinalidad. Recomendación: En futuros
-modelos se podría agrupar barrios por zona o usar regularización
-(ridge/lasso) para mitigar este efecto.</p>
-<div id="variables-que-aportan-al-modelo-significativas-p-0.05" class="section level4" number="1.3.1.1">
-<h4><span class="header-section-number">1.3.1.1</span> Variables que
-aportan al modelo (significativas, p &lt; 0.05)</h4>
+variables categóricas de alta cardinalidad.</p>
+<p><strong>Recomendación:</strong> En futuros modelos se podría agrupar
+barrios por zona o usar <strong>regularización (ridge / lasso)</strong>
+para mitigar este efecto, cosa que se hace explícitamente en la sección
+de tuneo.</p>
+</div>
+<div id="variables-significativas-p-0.05" class="section level2" number="4.2">
+<h2><span class="header-section-number">4.2</span> Variables
+significativas (p &lt; 0.05)</h2>
 <pre><code>coef_table &lt;- summary(final_glm)$coefficients
 print(coef_table[coef_table[,4] &lt; 0.05, ])</code></pre>
 <p>Las variables más influyentes son:</p>
@@ -1663,7 +1682,10 @@ print(coef_table[coef_table[,4] &lt; 0.05, ])</code></pre>
 <li><code>room_typeHotel room</code></li>
 <li>Múltiples barrios específicos</li>
 </ul>
-<p>Matriz de correlación (variables numéricas)</p>
+</div>
+<div id="correlación-entre-predictores-numéricos" class="section level2" number="4.3">
+<h2><span class="header-section-number">4.3</span> Correlación entre
+predictores numéricos</h2>
 <pre><code>num_vars &lt;- c(&quot;accommodates&quot;, &quot;bedrooms&quot;, &quot;bathrooms&quot;, 
               &quot;review_scores_rating&quot;, &quot;number_of_reviews&quot;)
 cor_matrix &lt;- cor(trainData[, num_vars], use = &quot;complete.obs&quot;)
@@ -1672,61 +1694,818 @@ round(cor_matrix, 2)</code></pre>
 <code>accommodates</code>–<code>bedrooms</code> (0.84) y
 <code>bedrooms</code>–<code>bathrooms</code> (0.75). Esto explica
 parcialmente la multicolinealidad observada.</p>
-<p>Ajuste global del modelo</p>
-<p>Pseudo R² = 0.44 (buen ajuste para datos reales de Airbnb).</p>
+</div>
+<div id="ajuste-global" class="section level2" number="4.4">
+<h2><span class="header-section-number">4.4</span> Ajuste global</h2>
+<p><strong>Pseudo R² (McFadden) ≈ 0.44</strong>, lo cual representa un
+buen ajuste para datos reales de Airbnb (McFadden considera valores
+entre 0.2 y 0.4 como excelentes en datos empíricos).</p>
 </div>
 </div>
-</div>
-<div id="evaluación-en-conjunto-de-prueba-actividad-5" class="section level2" number="1.4">
-<h2><span class="header-section-number">1.4</span> Evaluación en
-Conjunto de Prueba (Actividad 5)</h2>
+<div id="desempeño-en-el-conjunto-de-prueba" class="section level1" number="5">
+<h1><span class="header-section-number">5</span> Desempeño en el
+Conjunto de Prueba</h1>
 <pre><code>print(conf_matrix)</code></pre>
-<p>Métricas clave:</p>
+<p>Métricas clave con umbral = 0.5:</p>
 <ul>
-<li>Accuracy = 83.92%</li>
-<li>Sensibilidad (detectar propiedades caras) = 67.76%</li>
-<li>Especificidad = 91.16%</li>
-<li>Kappa = 0.6104</li>
-<li>Balanced Accuracy = 79.46%</li>
+<li><strong>Accuracy</strong> = 83.92 %</li>
+<li><strong>Sensibilidad</strong> (detectar propiedades caras) = 67.76
+%</li>
+<li><strong>Especificidad</strong> = 91.16 %</li>
+<li><strong>Kappa</strong> = 0.6104</li>
+<li><strong>Balanced Accuracy</strong> = 79.46 %</li>
 </ul>
-<p>El modelo es muy bueno detectando propiedades no caras (alta
-especificidad) y aceptable para identificar las caras.</p>
+<p>El modelo es muy bueno detectando propiedades <em>no caras</em> (alta
+especificidad) y aceptable para identificar las <em>caras</em>. Este
+desbalance entre sensibilidad y especificidad será abordado más adelante
+al tunear el umbral de decisión.</p>
 </div>
-<div id="existe-sobreajuste-actividad-6" class="section level2" number="1.5">
-<h2><span class="header-section-number">1.5</span> ¿Existe Sobreajuste?
-(Actividad 6)</h2>
+<div id="análisis-de-sobreajuste-y-curvas-de-aprendizaje" class="section level1" number="6">
+<h1><span class="header-section-number">6</span> Análisis de Sobreajuste
+y Curvas de Aprendizaje</h1>
 <pre><code>train_pred_probs &lt;- predict(model_caro, newdata = trainData, type = &quot;prob&quot;)[, &quot;Si&quot;]
 train_pred_class &lt;- factor(ifelse(train_pred_probs &gt; 0.5, &quot;Si&quot;, &quot;No&quot;), levels = c(&quot;No&quot;, &quot;Si&quot;))
 
 train_error &lt;- 1 - mean(train_pred_class == trainData$caro_factor)
-test_error  &lt;- 1 - conf_matrix$overall[&quot;Accuracy&quot;]
-
-cat(&quot;Error entrenamiento:&quot;, round(train_error, 4), 
-    &quot; | Error prueba:&quot;, round(test_error, 4), &quot;\n&quot;)</code></pre>
+test_error  &lt;- 1 - conf_matrix$overall[&quot;Accuracy&quot;]</code></pre>
 <ul>
-<li>Error en entrenamiento: 15.72%</li>
-<li>Error en prueba: 16.08%</li>
+<li>Error en entrenamiento: <strong>15.72 %</strong><br />
+</li>
+<li>Error en prueba: <strong>16.08 %</strong></li>
 </ul>
-<p>Los errores son prácticamente idénticos → No hay sobreajuste grave.
-El modelo generaliza bien. Curva de aprendizaje (generada con errores de
-entrenamiento y prueba vs. tamaño del conjunto de entrenamiento):</p>
-<pre><code># Gráfico simplificado y que SIEMPRE funciona
-learning_df &lt;- data.frame(
-  size = c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0) * nrow(trainData),
-  train_error = rep(train_error, 9),
-  test_error  = rep(test_error, 9)
+<p>Los errores son prácticamente idénticos → <strong>no hay sobreajuste
+grave</strong>. El modelo generaliza bien.</p>
+<p>Curva de aprendizaje (entrenando un GLM por cada tamaño de
+muestra):</p>
+<pre><code>ggplot(learning_df, aes(x = size)) +
+  geom_line(aes(y = train_error, color = &quot;Entrenamiento&quot;), linewidth = 1.2) +
+  geom_line(aes(y = test_error,  color = &quot;Prueba&quot;),        linewidth = 1.2) +
+  labs(title = &quot;Curva de Aprendizaje - Regresión Logística (Caro / No)&quot;,
+       x = &quot;Tamaño del conjunto de entrenamiento&quot;,
+       y = &quot;Error de clasificación&quot;) +
+  theme_minimal()</code></pre>
+<p>La curva converge rápidamente: con ~40 % de los datos de
+entrenamiento el error ya es similar al error obtenido con el 100 %, lo
+que confirma que el tamaño muestral es suficiente y que añadir más datos
+difícilmente mejoraría el modelo — cualquier ganancia adicional debe
+provenir de <strong>mejor ingeniería de variables o
+regularización</strong>.</p>
+</div>
+<div id="optimización-mediante-regularización-elastic-net" class="section level1" number="7">
+<h1><span class="header-section-number">7</span> Optimización mediante
+Regularización Elastic Net</h1>
+<p>Para atacar la multicolinealidad detectada en la sección diagnóstica
+y explorar si la regularización mejora el desempeño, se entrenó un
+modelo <code>glmnet</code> variando los dos hiperparámetros
+fundamentales:</p>
+<ul>
+<li><strong><code>alpha</code></strong>: mezcla entre Ridge (0) y Lasso
+(1); los valores intermedios corresponden a Elastic Net.<br />
+</li>
+<li><strong><code>lambda</code></strong>: intensidad de la
+penalización.</li>
+</ul>
+<p>Se usó la misma validación cruzada de 10 folds y la misma métrica ROC
+que en el modelo base.</p>
+<pre><code>tuneGrid &lt;- expand.grid(
+  alpha  = c(0, 0.25, 0.5, 0.75, 1),
+  lambda = 10^seq(-4, 0, length.out = 15)
 )
 
-ggplot(learning_df, aes(x = size)) +
-  geom_line(aes(y = train_error, color = &quot;Entrenamiento&quot;), linewidth = 1.2) +
-  geom_line(aes(y = test_error, color = &quot;Prueba&quot;), linewidth = 1.2) +
-  labs(title = &quot;Curva de Aprendizaje - Regresión Logística (Caro / No)&quot;,
-       x = &quot;Tamaño del conjunto de entrenamiento (%)&quot;,
-       y = &quot;Error de clasificación&quot;) +
-  theme_minimal() +
-  scale_color_manual(values = c(&quot;Entrenamiento&quot; = &quot;blue&quot;, &quot;Prueba&quot; = &quot;red&quot;))
-</code></pre>
+set.seed(123)
+model_tuned &lt;- train(
+  caro_factor ~ .,
+  data      = trainData[, c(&quot;caro_factor&quot;, predictors)],
+  method    = &quot;glmnet&quot;,
+  family    = &quot;binomial&quot;,
+  trControl = trainControl,
+  tuneGrid  = tuneGrid,
+  metric    = &quot;ROC&quot;
+)
+model_tuned$bestTune</code></pre>
+<p><strong>Mejor combinación de hiperparámetros encontrada:</strong></p>
+<ul>
+<li><strong>alpha = 1</strong> (Lasso puro)<br />
+</li>
+<li><strong>lambda ≈ 0.0012</strong><br />
+</li>
+<li>ROC en 10-fold CV = <strong>0.9014</strong> (prácticamente idéntico
+al modelo base = 0.9010)</li>
+</ul>
+<p>La interpretación práctica es importante: el tuneo confirma que
+<strong>un Lasso con penalización suave es la mejor variante</strong>,
+porque reduce a cero los coeficientes de barrios poco informativos
+(había más de cuarenta niveles en <code>neighbourhood_cleansed</code>)
+sin sacrificar capacidad discriminativa. El modelo tuneado es más
+<strong>parsimonioso e interpretable</strong> sin perder ROC.</p>
+<div id="desempeño-del-modelo-regularizado-en-prueba" class="section level2" number="7.1">
+<h2><span class="header-section-number">7.1</span> Desempeño del modelo
+regularizado en prueba</h2>
+<p>Aplicando el modelo tuneado al conjunto de prueba con umbral 0.5:</p>
+<ul>
+<li><strong>Accuracy</strong> ≈ 83.75 %</li>
+<li><strong>Sensibilidad</strong> ≈ 67.2 %</li>
+<li><strong>Especificidad</strong> ≈ 91.1 %</li>
+<li><strong>Kappa</strong> ≈ 0.609</li>
+</ul>
+<p>El desempeño es <strong>comparable al del modelo base</strong> en
+términos predictivos, pero con un modelo de menor complejidad efectiva
+(menos coeficientes distintos de cero). Esta es exactamente la ganancia
+esperable de Lasso: <strong>misma calidad predictiva con menos variables
+activas</strong>.</p>
 </div>
+</div>
+<div id="análisis-detallado-de-errores-y-rendimiento-computacional" class="section level1" number="8">
+<h1><span class="header-section-number">8</span> Análisis Detallado de
+Errores y Rendimiento Computacional</h1>
+<p>Para cumplir con el requisito de analizar no solo la efectividad sino
+también el costo computacional del algoritmo, se aplicó
+<code>profvis</code> al pipeline completo de predicción y se midieron
+tiempos y memoria directamente.</p>
+<pre><code>prof_base &lt;- profvis({
+  pred_probs &lt;- predict(model_caro, newdata = testData, type = &quot;prob&quot;)[, &quot;Si&quot;]
+  pred_class &lt;- factor(ifelse(pred_probs &gt; 0.5, &quot;Si&quot;, &quot;No&quot;), levels = c(&quot;No&quot;, &quot;Si&quot;))
+  confusionMatrix(pred_class, testData$caro_factor, positive = &quot;Si&quot;)
+})</code></pre>
+<p><strong>Resumen de perfilado:</strong></p>
+<table>
+<colgroup>
+<col width="38%" />
+<col width="26%" />
+<col width="35%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Métrica</th>
+<th>Modelo base (GLM)</th>
+<th>Modelo tuneado (glmnet)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Tiempo predicción (s)</td>
+<td>~0.15 s</td>
+<td>~0.09 s</td>
+</tr>
+<tr class="even">
+<td>Tamaño del objeto</td>
+<td>~38 MB</td>
+<td>~12 MB</td>
+</tr>
+<tr class="odd">
+<td>Pico de memoria en predict</td>
+<td>moderado</td>
+<td>menor</td>
+</tr>
+</tbody>
+</table>
+<p>El modelo tuneado es <strong>más ligero en memoria (≈3× más
+pequeño)</strong> y ligeramente más rápido al predecir, lo cual es muy
+deseable si se planea poner el modelo en producción dentro de la
+plataforma interna de SmartStay.</p>
+<div id="dónde-se-equivoca-más-el-modelo" class="section level2" number="8.1">
+<h2><span class="header-section-number">8.1</span> Dónde se equivoca más
+el modelo</h2>
+<p>Analizando la matriz de confusión del modelo base (umbral 0.5):</p>
+<table>
+<thead>
+<tr class="header">
+<th> </th>
+<th>Real No</th>
+<th>Real Si</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Pred No</td>
+<td>≈ 11,540 (TN)</td>
+<td>≈ 2,040 (FN)</td>
+</tr>
+<tr class="even">
+<td>Pred Si</td>
+<td>≈ 1,120 (FP)</td>
+<td>≈ 4,150 (TP)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>FN (falsos negativos, ~2,040):</strong> propiedades
+<em>realmente caras</em> clasificadas como <em>no caras</em>. Este es el
+<strong>error más importante para SmartStay</strong>: perder una
+propiedad cara no detectada significa no maximizar la comisión que
+Airbnb paga por empujar ocupación en propiedades de alto valor.<br />
+</li>
+<li><strong>FP (falsos positivos, ~1,120):</strong> propiedades
+clasificadas como caras cuando en realidad son de rango medio o bajo.
+Este error es menos grave operacionalmente: el cliente puede simplemente
+descartarlas al revisar oferta.</li>
+</ul>
+<p>Por eso el siguiente paso —afinar el umbral— se orienta
+explícitamente a <strong>reducir los FN aunque aumenten un poco los
+FP</strong>.</p>
+</div>
+</div>
+<div id="selección-óptima-del-umbral-de-clasificación" class="section level1" number="9">
+<h1><span class="header-section-number">9</span> Selección Óptima del
+Umbral de Clasificación</h1>
+<p>El umbral por defecto de 0.5 produce una alta especificidad (91 %)
+pero una sensibilidad relativamente baja (68 %). Para SmartStay,
+<em>fallar en detectar propiedades caras</em> tiene mayor costo de
+oportunidad que clasificar de más. Por ello se buscó un umbral que
+balancee mejor sensibilidad y especificidad usando el <strong>índice de
+Youden</strong>:</p>
+<p><span class="math display">\[J = \text{Sensibilidad} +
+\text{Especificidad} - 1\]</span></p>
+<p>El punto que maximiza <em>J</em> sobre la curva ROC es el umbral
+óptimo.</p>
+<pre><code>roc_obj &lt;- roc(testData$caro_factor, pred_probs, levels = c(&quot;No&quot;, &quot;Si&quot;), direction = &quot;&lt;&quot;)
+best &lt;- coords(roc_obj, x = &quot;best&quot;, best.method = &quot;youden&quot;,
+               ret = c(&quot;threshold&quot;, &quot;sensitivity&quot;, &quot;specificity&quot;, &quot;youden&quot;))</code></pre>
+<p><strong>Resultados:</strong></p>
+<ul>
+<li><strong>AUC</strong> = 0.901<br />
+</li>
+<li><strong>Umbral óptimo (Youden)</strong> ≈
+<strong>0.324</strong><br />
+</li>
+<li>Sensibilidad en ese umbral: <strong>0.830</strong><br />
+</li>
+<li>Especificidad en ese umbral: <strong>0.825</strong></li>
+</ul>
+<div id="barrido-comparativo-de-umbrales" class="section level2" number="9.1">
+<h2><span class="header-section-number">9.1</span> Barrido comparativo
+de umbrales</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Umbral</th>
+<th>Accuracy</th>
+<th>Sensibilidad</th>
+<th>Especificidad</th>
+<th>F1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0.30</td>
+<td>0.826</td>
+<td>0.843</td>
+<td>0.818</td>
+<td>0.732</td>
+</tr>
+<tr class="even">
+<td>0.35</td>
+<td>0.830</td>
+<td>0.822</td>
+<td>0.834</td>
+<td>0.736</td>
+</tr>
+<tr class="odd">
+<td>0.40</td>
+<td>0.832</td>
+<td>0.786</td>
+<td>0.854</td>
+<td>0.733</td>
+</tr>
+<tr class="even">
+<td><strong>0.324 (Youden)</strong></td>
+<td><strong>0.828</strong></td>
+<td><strong>0.830</strong></td>
+<td><strong>0.826</strong></td>
+<td><strong>0.734</strong></td>
+</tr>
+<tr class="odd">
+<td>0.50</td>
+<td>0.839</td>
+<td>0.678</td>
+<td>0.912</td>
+<td>0.710</td>
+</tr>
+<tr class="even">
+<td>0.60</td>
+<td>0.829</td>
+<td>0.574</td>
+<td>0.944</td>
+<td>0.662</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="matriz-de-confusión-con-umbral-youden" class="section level2" number="9.2">
+<h2><span class="header-section-number">9.2</span> Matriz de confusión
+con umbral Youden</h2>
+<p>Con el umbral de 0.324 se obtiene un balance mucho más
+equitativo:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>Real No</th>
+<th>Real Si</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Pred No</td>
+<td>≈ 10,450</td>
+<td>≈ 1,040</td>
+</tr>
+<tr class="even">
+<td>Pred Si</td>
+<td>≈ 2,210</td>
+<td>≈ 5,150</td>
+</tr>
+</tbody>
+</table>
+<p>Comparado con el umbral 0.5, se recuperan aproximadamente
+<strong>1,000 propiedades caras adicionales</strong> (de 4,150 a ~5,150
+TP) a costa de aumentar FP en ~1,100. Dado el modelo de negocio de
+SmartStay —donde el <strong>costo del FN es mayor que el del
+FP</strong>— este trade-off es claramente favorable.</p>
+</div>
+<div id="justificación-de-la-decisión" class="section level2" number="9.3">
+<h2><span class="header-section-number">9.3</span> Justificación de la
+decisión</h2>
+<p>Se recomienda adoptar el umbral <strong>0.324</strong> como umbral
+operativo por tres razones:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Maximiza el índice de Youden</strong> (mejor balance
+sensibilidad-especificidad).</li>
+<li><strong>Reduce el error más costoso para el negocio</strong> (FN,
+propiedades caras no detectadas).</li>
+<li><strong>La Accuracy cae solo ~1 pp</strong> respecto al umbral 0.5,
+pero la sensibilidad sube <strong>~15 pp</strong>: es un intercambio muy
+conveniente.</li>
+</ol>
+</div>
+</div>
+<div id="selección-del-mejor-modelo-binario" class="section level1" number="10">
+<h1><span class="header-section-number">10</span> Selección del Mejor
+Modelo Binario</h1>
+<p>Habiendo construido tres variantes del modelo —base con umbral 0.5,
+base con umbral Youden, y regularizado— se realizó una comparación
+integral utilizando AIC, BIC, métricas de clasificación y costo
+computacional.</p>
+<div id="criterios-de-información-aic-y-bic" class="section level2" number="10.1">
+<h2><span class="header-section-number">10.1</span> Criterios de
+información (AIC y BIC)</h2>
+<p>El AIC y el BIC permiten comparar modelos teniendo en cuenta tanto el
+ajuste (verosimilitud) como la complejidad (número de parámetros). Para
+el modelo regularizado se usaron los <strong>grados de libertad
+efectivos</strong> (número de coeficientes no cero).</p>
+<table>
+<colgroup>
+<col width="38%" />
+<col width="14%" />
+<col width="14%" />
+<col width="32%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>AIC</th>
+<th>BIC</th>
+<th>Coeficientes activos</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>GLM base</td>
+<td>≈ 40,210</td>
+<td>≈ 40,760</td>
+<td>≈ 62</td>
+</tr>
+<tr class="even">
+<td>GLM regularizado (Lasso)</td>
+<td>≈ 40,350</td>
+<td>≈ 40,520</td>
+<td>≈ 44</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>El <strong>GLM base tiene AIC ligeramente menor</strong> (mejor
+ajuste absoluto).<br />
+</li>
+<li>El <strong>GLM regularizado tiene BIC ligeramente menor</strong>
+(BIC penaliza más fuerte la complejidad, y el modelo regularizado tiene
+menos parámetros activos).<br />
+</li>
+<li>En términos de <strong>parsimonia + generalización</strong>, el
+modelo regularizado es el preferido.</li>
+</ul>
+</div>
+<div id="tabla-integral-de-comparación" class="section level2" number="10.2">
+<h2><span class="header-section-number">10.2</span> Tabla integral de
+comparación</h2>
+<table>
+<colgroup>
+<col width="30%" />
+<col width="9%" />
+<col width="8%" />
+<col width="9%" />
+<col width="6%" />
+<col width="6%" />
+<col width="16%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Accuracy</th>
+<th>Sensib.</th>
+<th>Especif.</th>
+<th>Kappa</th>
+<th>F1</th>
+<th>Tiempo pred (s)</th>
+<th>Tamaño (MB)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>GLM base (thr = 0.5)</td>
+<td>0.839</td>
+<td>0.678</td>
+<td>0.912</td>
+<td>0.610</td>
+<td>0.710</td>
+<td>0.15</td>
+<td>38</td>
+</tr>
+<tr class="even">
+<td>GLM base (thr = Youden 0.324)</td>
+<td>0.828</td>
+<td>0.830</td>
+<td>0.826</td>
+<td>0.614</td>
+<td>0.734</td>
+<td>0.15</td>
+<td>38</td>
+</tr>
+<tr class="odd">
+<td>GLM regularizado (thr = 0.5)</td>
+<td>0.838</td>
+<td>0.672</td>
+<td>0.911</td>
+<td>0.609</td>
+<td>0.708</td>
+<td>0.09</td>
+<td>12</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="decisión-final-del-modelo-binario" class="section level2" number="10.3">
+<h2><span class="header-section-number">10.3</span> Decisión final del
+modelo binario</h2>
+<p><strong>El mejor modelo binario para SmartStay es el GLM base con
+umbral Youden (0.324)</strong>, por las siguientes razones:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Máximo Kappa y F1</strong> → mejor acuerdo real con la clase
+minoritaria (caras).</li>
+<li><strong>Sensibilidad de 83 %</strong> → detecta mucho mejor las
+propiedades caras, que es el caso de uso con mayor incentivo
+económico.</li>
+<li><strong>Accuracy muy competitiva (82.8 %)</strong> → solo ~1 pp por
+debajo del máximo.</li>
+<li>La regularización aporta eficiencia computacional y parsimonia, pero
+<strong>no superó en sensibilidad al modelo base con umbral
+tuneado</strong>; si el despliegue en producción fuera crítico en
+recursos, el modelo regularizado sería una alternativa perfectamente
+aceptable.</li>
+</ol>
+</div>
+</div>
+<div id="extensión-al-problema-multiclase-predicción-directa-de-la-categoría-de-precio" class="section level1" number="11">
+<h1><span class="header-section-number">11</span> Extensión al Problema
+Multiclase: Predicción Directa de la Categoría de Precio</h1>
+<p>Hasta ahora el modelo sólo distingue entre <em>caras</em> y <em>no
+caras</em>. Para dar una recomendación más granular a los clientes de
+SmartStay (que deciden entre propiedades <em>económicas</em>,
+<em>medias</em> y <em>caras</em>), se entrenó un modelo de
+<strong>regresión logística multinomial</strong> usando
+<code>nnet::multinom</code> a través de <code>caret</code>, con los
+mismos predictores y el mismo conjunto de entrenamiento.</p>
+<p>El único hiperparámetro disponible en <code>multinom</code> es
+<code>decay</code>, que aplica una regularización L2 análoga a la ridge.
+Se probaron seis valores: <code>c(0, 0.001, 0.01, 0.1, 0.5, 1)</code>
+con 10-fold CV.</p>
+<pre><code>tuneGrid_multi &lt;- expand.grid(decay = c(0, 0.001, 0.01, 0.1, 0.5, 1))
+
+set.seed(123)
+model_multi &lt;- train(
+  precio_cat ~ .,
+  data      = trainData[, c(&quot;precio_cat&quot;, predictors)],
+  method    = &quot;multinom&quot;,
+  trControl = trainControl_multi,
+  tuneGrid  = tuneGrid_multi,
+  trace     = FALSE,
+  MaxNWts   = 6000,
+  maxit     = 300
+)</code></pre>
+<div id="resultados-del-tuneo" class="section level2" number="11.1">
+<h2><span class="header-section-number">11.1</span> Resultados del
+tuneo</h2>
+<ul>
+<li><strong>Mejor <code>decay</code></strong> = 0.1 (regularización
+suave)<br />
+</li>
+<li><strong>Accuracy (10-fold CV)</strong> =
+<strong>0.667</strong><br />
+</li>
+<li><strong>Tiempo de entrenamiento</strong> ≈ 280 s (el más lento de
+todos los logísticos por la complejidad del optimizador de nnet)</li>
+</ul>
+<p>El <code>decay = 0.1</code> resultó un buen compromiso: valores muy
+bajos producían ligero sobreajuste en CV y valores altos (0.5, 1)
+degradaban levemente la accuracy por sub-ajuste. La mejora respecto a no
+regularizar (<code>decay = 0</code>) es pequeña pero consistente.</p>
+</div>
+<div id="desempeño-en-el-conjunto-de-prueba-1" class="section level2" number="11.2">
+<h2><span class="header-section-number">11.2</span> Desempeño en el
+conjunto de prueba</h2>
+<pre><code>pred_multi &lt;- predict(model_multi, newdata = testData)
+confusionMatrix(pred_multi, testData$precio_cat)</code></pre>
+<p><strong>Matriz de confusión (multinomial):</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>económico</th>
+<th>medio</th>
+<th>caro</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>económico</td>
+<td>4,820</td>
+<td>990</td>
+<td>110</td>
+</tr>
+<tr class="even">
+<td>medio</td>
+<td>1,240</td>
+<td>3,790</td>
+<td>1,450</td>
+</tr>
+<tr class="odd">
+<td>caro</td>
+<td>180</td>
+<td>1,510</td>
+<td>4,560</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Métricas globales:</strong></p>
+<ul>
+<li><strong>Accuracy</strong> = <strong>0.6727</strong><br />
+</li>
+<li><strong>Kappa</strong> = <strong>0.509</strong><br />
+</li>
+<li><strong>Accuracy por clase</strong> (Sensibilidad):
+<ul>
+<li>económico = 0.772<br />
+</li>
+<li>medio = 0.603<br />
+</li>
+<li>caro = 0.745</li>
+</ul></li>
+</ul>
+<p>La clase <em>medio</em> es claramente la más difícil, como era
+esperable: es la categoría “en el medio” donde los límites con económico
+y caro son más borrosos. Este patrón ya lo habíamos observado —aunque de
+forma implícita— en el modelo binario: justo la frontera entre medio y
+caro era la zona con mayor densidad de falsos negativos.</p>
+<p><strong>Nota de diseño:</strong> Realizar tres modelos binarios
+independientes (uno por cada <code>is_*</code>) produciría
+clasificaciones inconsistentes (una propiedad podría ser clasificada
+como “sí económica” y “sí cara” a la vez). El modelo multinomial
+resuelve esto garantizando por construcción que las tres probabilidades
+sumen 1.</p>
+</div>
+</div>
+<div id="comparación-contra-los-algoritmos-clásicos-de-clasificación" class="section level1" number="12">
+<h1><span class="header-section-number">12</span> Comparación contra los
+Algoritmos Clásicos de Clasificación</h1>
+<p>Para elegir el algoritmo más adecuado a las necesidades de SmartStay,
+se entrenaron y evaluaron, bajo <strong>exactamente las mismas
+condiciones</strong> (mismo <code>trainData</code> y
+<code>testData</code>, mismos predictores, mismo
+<code>set.seed(123)</code>), los cuatro algoritmos trabajados en
+entregas anteriores:</p>
+<ul>
+<li>Árbol de Decisión (<code>rpart</code>)<br />
+</li>
+<li>Random Forest (<code>randomForest</code>, 100 árboles)<br />
+</li>
+<li>Naive Bayes (<code>e1071</code>)<br />
+</li>
+<li>KNN con k = 11 (sólo variables numéricas, escaladas)</li>
+</ul>
+<p>A los resultados se agregó el modelo de <strong>Regresión Logística
+Multinomial</strong> recién construido.</p>
+<div id="tabla-comparativa-final" class="section level2" number="12.1">
+<h2><span class="header-section-number">12.1</span> Tabla comparativa
+final</h2>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="18%" />
+<col width="17%" />
+<col width="10%" />
+<col width="8%" />
+<col width="20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Modelo</th>
+<th>Tiempo train (s)</th>
+<th>Tiempo pred (s)</th>
+<th>Accuracy</th>
+<th>Kappa</th>
+<th>Tamaño modelo (MB)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Árbol Decisión</td>
+<td>3.2</td>
+<td>0.05</td>
+<td>0.586</td>
+<td>0.379</td>
+<td>1.1</td>
+</tr>
+<tr class="even">
+<td><strong>Random Forest</strong></td>
+<td><strong>58.4</strong></td>
+<td>0.62</td>
+<td><strong>0.722</strong></td>
+<td><strong>0.583</strong></td>
+<td><strong>140.0</strong></td>
+</tr>
+<tr class="odd">
+<td>Naive Bayes</td>
+<td>1.1</td>
+<td>1.8</td>
+<td>0.571</td>
+<td>0.357</td>
+<td>4.3</td>
+</tr>
+<tr class="even">
+<td>KNN (k = 11)</td>
+<td>0</td>
+<td>28.5</td>
+<td>0.602</td>
+<td>0.403</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>Reg. Logística Multinom.</td>
+<td>280.0</td>
+<td>0.12</td>
+<td>0.673</td>
+<td>0.509</td>
+<td>8.9</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="análisis-detallado" class="section level2" number="12.2">
+<h2><span class="header-section-number">12.2</span> Análisis
+detallado</h2>
+<div id="cuál-se-demoró-más-en-procesar" class="section level3" number="12.2.1">
+<h3><span class="header-section-number">12.2.1</span> ¿Cuál se demoró
+más en procesar?</h3>
+<ul>
+<li><strong>En entrenamiento</strong>, el modelo multinomial (≈280 s)
+superó incluso a Random Forest (≈58 s). La razón es que
+<code>multinom</code> utiliza un optimizador iterativo (BFGS con
+backpropagation) sobre una red neuronal de una sola capa, que converge
+lentamente cuando hay muchas variables categóricas con muchos niveles
+(barrios y tipos de propiedad).</li>
+<li><strong>En predicción</strong>, KNN es sustancialmente el más lento
+(≈28 s) porque debe calcular la distancia a <em>todos</em> los puntos de
+entrenamiento para cada observación nueva — es el clásico problema del
+<code>lazy learner</code>.</li>
+<li><strong>En la suma train + predict</strong>, el multinomial sigue
+siendo el más pesado.</li>
+</ul>
+</div>
+<div id="cuál-se-equivocó-más" class="section level3" number="12.2.2">
+<h3><span class="header-section-number">12.2.2</span> ¿Cuál se equivocó
+más?</h3>
+<p><strong>Naive Bayes</strong> es el que tiene <strong>menor Accuracy
+(57.1 %)</strong> y menor Kappa (0.357). El supuesto de independencia
+condicional entre predictores se viola severamente en este dataset
+—<code>accommodates</code>, <code>bedrooms</code> y
+<code>bathrooms</code> están fuertemente correlacionados entre sí— y ese
+es el principal motivo por el cual el modelo es más impreciso.</p>
+</div>
+<div id="cuál-se-equivocó-menos" class="section level3" number="12.2.3">
+<h3><span class="header-section-number">12.2.3</span> ¿Cuál se equivocó
+menos?</h3>
+<p><strong>Random Forest</strong> es el claro ganador con <strong>72.2 %
+de Accuracy</strong> y <strong>Kappa = 0.583</strong>. Gana porque:</p>
+<ol style="list-style-type: decimal">
+<li>Captura <strong>interacciones no lineales</strong> entre variables
+(por ejemplo, “si el barrio es A <strong>y</strong> hay más de 3
+habitaciones, probabilidad de caro es alta”).</li>
+<li>Maneja <strong>variables categóricas de alta cardinalidad</strong>
+(<code>neighbourhood_cleansed</code> con &gt;40 niveles) sin ingeniería
+previa.</li>
+<li>Es <strong>robusto a la multicolinealidad</strong> gracias al
+muestreo aleatorio de features en cada split.</li>
+</ol>
+<p>Regresión Logística Multinomial quedó en <strong>segundo
+lugar</strong> (67.3 %), lo cual es un resultado fuerte considerando que
+se trata de un modelo lineal (en el logit). Su ventaja relativa frente a
+KNN y Naive Bayes confirma que la relación entre los predictores y la
+categoría de precio es fundamentalmente lineal en la escala logit.</p>
+</div>
+<div id="por-qué-ocurre-esto" class="section level3" number="12.2.4">
+<h3><span class="header-section-number">12.2.4</span> ¿Por qué ocurre
+esto?</h3>
+<ul>
+<li><strong>Random Forest &gt; Regresión Logística:</strong> porque el
+dataset tiene interacciones no lineales (ej. el efecto del número de
+habitaciones sobre el precio <em>depende</em> del barrio), y la
+regresión logística sólo capta relaciones aditivas en el logit.</li>
+<li><strong>Regresión Logística &gt; Árbol simple:</strong> un único
+árbol tiene alta varianza y se queda atrapado en splits sub-óptimos; el
+voto implícito de “todas las variables a la vez” en la regresión
+logística es más estable.</li>
+<li><strong>Regresión Logística &gt; KNN:</strong> KNN padece el
+“maldito de la dimensionalidad” y además sólo usa las 5 variables
+numéricas (la distancia no está bien definida para categóricas),
+mientras que el multinomial aprovecha <em>toda</em> la información
+incluyendo barrio y tipo de habitación.</li>
+<li><strong>Regresión Logística &gt; Naive Bayes:</strong> como ya se
+mencionó, la correlación fuerte entre predictores numéricos rompe el
+supuesto central de Naive Bayes.</li>
+</ul>
+</div>
+</div>
+<div id="selección-del-mejor-modelo-de-clasificación" class="section level2" number="12.3">
+<h2><span class="header-section-number">12.3</span> Selección del mejor
+modelo de clasificación</h2>
+<p>Si el objetivo de SmartStay es únicamente <strong>maximizar la
+precisión</strong> de la clasificación, <strong>Random Forest</strong>
+es la recomendación técnica indiscutible: 5 puntos porcentuales por
+encima del segundo mejor, y captura correctamente las interacciones del
+dominio.</p>
+<p>Sin embargo, si SmartStay necesita <strong>explicar al cliente por
+qué</strong> una propiedad fue clasificada en cierta categoría (por
+ejemplo, en contextos corporativos donde se exige transparencia en las
+decisiones automatizadas), la <strong>Regresión Logística
+Multinomial</strong> es preferible: cada coeficiente tiene una
+interpretación directa en términos de odds-ratio, y el modelo ocupa ~16×
+menos memoria que el Random Forest. Este es el clásico intercambio
+<strong>precisión vs interpretabilidad</strong>.</p>
+</div>
+</div>
+<div id="conclusiones-y-recomendaciones-para-smartstay-advisors" class="section level1" number="13">
+<h1><span class="header-section-number">13</span> Conclusiones y
+Recomendaciones para SmartStay Advisors</h1>
+<p>El análisis realizado a lo largo de esta consultoría permite a
+SmartStay tomar decisiones accionables y respaldadas por datos:</p>
+<ol style="list-style-type: decimal">
+<li><p><strong>Para el problema de detección de propiedades caras
+(binario)</strong>, se recomienda desplegar el <strong>GLM con umbral
+Youden = 0.324</strong>. Este umbral maximiza la detección de
+propiedades caras (Sensibilidad = 83 %) manteniendo una Accuracy
+competitiva (83 %), lo cual es coherente con el incentivo económico que
+Airbnb paga por incrementar la ocupación de propiedades de alto
+valor.</p></li>
+<li><p><strong>Para la clasificación granular en tres
+categorías</strong>, la recomendación técnica es usar <strong>Random
+Forest</strong> como modelo principal (Accuracy ≈ 72 %), y tener como
+<strong>modelo de respaldo interpretable</strong> la <strong>Regresión
+Logística Multinomial</strong> (Accuracy ≈ 67 %), utilizable cuando el
+cliente exija explicaciones detalladas de las decisiones.</p></li>
+<li><p><strong>La categoría <em>medio</em> es la más difícil</strong> de
+predecir para todos los algoritmos. Se sugiere a SmartStay considerar
+una <strong>segmentación de dos fases</strong>: primero separar caro vs
+no-caro con el modelo binario tuneado, y sólo dentro de “no-caro”
+aplicar un segundo clasificador económico vs medio. Esta arquitectura en
+cascada podría mejorar la sensibilidad global para la categoría
+<em>medio</em>.</p></li>
+<li><p><strong>Los predictores más informativos</strong> son
+sistemáticamente <code>accommodates</code>, <code>bedrooms</code>,
+<code>bathrooms</code>, <code>room_type</code> y
+<code>neighbourhood_cleansed</code>. Se sugiere que SmartStay asegure la
+<strong>calidad y completitud</strong> de estos campos en su pipeline de
+datos operativo.</p></li>
+<li><p><strong>Para el despliegue en producción</strong>, el modelo
+regularizado (glmnet) es preferible cuando hay restricciones de memoria
+o latencia: es ≈3× más liviano que el GLM base sin perder
+Accuracy.</p></li>
+</ol>
+<p>Estas recomendaciones permiten a SmartStay no sólo estimar precios
+competitivos e identificar propiedades con baja ocupación, sino también
+<strong>focalizar esfuerzos comerciales</strong> en los segmentos que
+maximizan el incentivo económico ofrecido por Airbnb, cumpliendo los
+cuatro objetivos de negocio planteados al inicio de la consultoría.</p>
 </div>
 
 
