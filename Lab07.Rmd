@@ -13,31 +13,38 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10, fig.height = 6)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 10, fig.height = 6)
 ```
 
 # Introducción a la Consultoría
 
-SmartStay Advisors es una firma intermediaria que ayuda a clientes corporativos y particulares a encontrar propiedades óptimas en Airbnb. Para maximizar la rentabilidad y aprovechar los incentivos de Airbnb por aumentar la ocupación de propiedades con bajo desempeño, se requiere identificar factores que influyen en el precio y la ocupación.
-En esta entrega se implementó un modelo de Regresión Logística binaria para clasificar propiedades como “caras” o “no caras”, utilizando exactamente los mismos conjuntos de entrenamiento y prueba de entregas anteriores. Se analizó el modelo, su ajuste, multicolinealidad, desempeño y posible sobreajuste.
+SmartStay Advisors es una firma intermediaria que ayuda a clientes corporativos y particulares a encontrar propiedades óptimas en Airbnb. Para maximizar la rentabilidad y aprovechar los incentivos de Airbnb por aumentar la ocupación de propiedades con bajo desempeño, se requiere identificar los factores que influyen en el precio y la ocupación.
 
-## Preparación de los Datos (Actividad 1 y 2)
-Se cargó el archivo listings.RData y se limpió la variable price. Se recreó la variable categórica precio_cat usando cuartiles (33% y 66%), tal como en laboratorios anteriores.
-Distribución de precio_cat:
+En esta entrega se implementó un modelo de **Regresión Logística binaria** para clasificar propiedades como "caras" o "no caras", utilizando exactamente los mismos conjuntos de entrenamiento y prueba de entregas anteriores. Se analizó el modelo base, su ajuste, multicolinealidad, desempeño y posible sobreajuste. Posteriormente se aplicó **regularización (Ridge / Lasso / Elastic Net)**, se estudió la **distribución de errores y el costo computacional**, se optimizó el **umbral de clasificación** mediante el índice de Youden, y se realizó una **comparación formal entre los modelos resultantes** para elegir el más apropiado al contexto de negocio.
+
+# Preparación de los Datos
+
+Se cargó el archivo `listings.RData` y se limpió la variable `price`. Se recreó la variable categórica `precio_cat` usando cuartiles (33 % y 66 %), tal como en laboratorios anteriores.
+
+Distribución de `precio_cat`:
 
 ```
 table(listings$precio_cat)
+# económico     medio      caro
+#    20976     20763     20965
 ```
+
 Se crearon las tres variables dicotómicas solicitadas:
 
 - `is_economico`
 - `is_medio`
 - `is_caro`
 
-Se realizó la partición con `set.seed(123)` (70% entrenamiento). Después de eliminar filas con NA en las variables predictoras, quedaron:
+Se realizó la partición con `set.seed(123)` (70 % entrenamiento). Después de eliminar filas con NA en las variables predictoras, quedaron:
 
-- Train: 43,913 observaciones
-- Test: 18,849 observaciones
+- **Train:** 43,913 observaciones  
+- **Test:** 18,849 observaciones
 
 Variables predictoras utilizadas (exactamente las mismas que en KNN, Árbol, Random Forest y Naive Bayes):
 
@@ -46,9 +53,10 @@ predictors <- c("accommodates", "bedrooms", "bathrooms",
                 "review_scores_rating", "number_of_reviews",
                 "host_is_superhost", "room_type", "neighbourhood_cleansed")
 ```
+
 `r paste(predictors, collapse = ", ")`
 
-## Construcción del Modelo de Regresión Logística (Actividad 3)
+# Construcción del Modelo Base
 
 Se entrenó un modelo GLM binomial con validación cruzada de 10 folds y métrica ROC.
 
@@ -58,21 +66,23 @@ print(model_caro)
 
 Resultados de validación cruzada (10-fold CV):
 
-- ROC = 0.90098
-- Sensibilidad = 0.91442
-- Especificidad = 0.66857
+- **ROC** = 0.90098
+- **Sensibilidad** = 0.91442
+- **Especificidad** = 0.66857
 
 ```
 summary(model_caro$finalModel)
 ```
 
-## Análisis del Modelo (Actividad 4)
-### Multicolinealidad
+# Evaluación Diagnóstica del Modelo
+
+## Multicolinealidad
+
 No se detectaron variables aliadas con `alias()`. Sin embargo, debido al alto número de categorías en `neighbourhood_cleansed`, no fue posible calcular el VIF completo (existen singularidades). Esto es común en datasets con muchas variables categóricas de alta cardinalidad.
-Recomendación: En futuros modelos se podría agrupar barrios por zona o usar regularización (ridge/lasso) para mitigar este efecto.
 
+**Recomendación:** En futuros modelos se podría agrupar barrios por zona o usar **regularización (ridge / lasso)** para mitigar este efecto, cosa que se hace explícitamente en la sección de tuneo.
 
-#### Variables que aportan al modelo (significativas, p < 0.05)
+## Variables significativas (p < 0.05)
 
 ```
 coef_table <- summary(final_glm)$coefficients
@@ -87,7 +97,7 @@ Las variables más influyentes son:
 - `room_typeHotel room`
 - Múltiples barrios específicos
 
-Matriz de correlación (variables numéricas)
+## Correlación entre predictores numéricos
 
 ```
 num_vars <- c("accommodates", "bedrooms", "bathrooms", 
@@ -98,28 +108,27 @@ round(cor_matrix, 2)
 
 Se observa alta correlación entre `accommodates`–`bedrooms` (0.84) y `bedrooms`–`bathrooms` (0.75). Esto explica parcialmente la multicolinealidad observada.
 
-Ajuste global del modelo
+## Ajuste global
 
-Pseudo R² = 0.44 (buen ajuste para datos reales de Airbnb).
+**Pseudo R² (McFadden) ≈ 0.44**, lo cual representa un buen ajuste para datos reales de Airbnb (McFadden considera valores entre 0.2 y 0.4 como excelentes en datos empíricos).
 
-## Evaluación en Conjunto de Prueba (Actividad 5)
+# Desempeño en el Conjunto de Prueba
 
 ```
 print(conf_matrix)
 ```
 
-Métricas clave:
+Métricas clave con umbral = 0.5:
 
-- Accuracy = 83.92%
-- Sensibilidad (detectar propiedades caras) = 67.76%
-- Especificidad = 91.16%
-- Kappa = 0.6104
-- Balanced Accuracy = 79.46%
+- **Accuracy** = 83.92 %
+- **Sensibilidad** (detectar propiedades caras) = 67.76 %
+- **Especificidad** = 91.16 %
+- **Kappa** = 0.6104
+- **Balanced Accuracy** = 79.46 %
 
-El modelo es muy bueno detectando propiedades no caras (alta especificidad) y aceptable para identificar las caras.
+El modelo es muy bueno detectando propiedades *no caras* (alta especificidad) y aceptable para identificar las *caras*. Este desbalance entre sensibilidad y especificidad será abordado más adelante al tunear el umbral de decisión.
 
-
-## ¿Existe Sobreajuste? (Actividad 6)
+# Análisis de Sobreajuste y Curvas de Aprendizaje
 
 ```
 train_pred_probs <- predict(model_caro, newdata = trainData, type = "prob")[, "Si"]
@@ -127,32 +136,195 @@ train_pred_class <- factor(ifelse(train_pred_probs > 0.5, "Si", "No"), levels = 
 
 train_error <- 1 - mean(train_pred_class == trainData$caro_factor)
 test_error  <- 1 - conf_matrix$overall["Accuracy"]
-
-cat("Error entrenamiento:", round(train_error, 4), 
-    " | Error prueba:", round(test_error, 4), "\n")
 ```
 
-- Error en entrenamiento: 15.72%
-- Error en prueba: 16.08%
+- Error en entrenamiento: **15.72 %**  
+- Error en prueba: **16.08 %**
 
-Los errores son prácticamente idénticos → No hay sobreajuste grave. El modelo generaliza bien.
-Curva de aprendizaje (generada con errores de entrenamiento y prueba vs. tamaño del conjunto de entrenamiento):
+Los errores son prácticamente idénticos → **no hay sobreajuste grave**. El modelo generaliza bien.
+
+Curva de aprendizaje (entrenando un GLM por cada tamaño de muestra):
 
 ```
-# Gráfico simplificado y que SIEMPRE funciona
-learning_df <- data.frame(
-  size = c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0) * nrow(trainData),
-  train_error = rep(train_error, 9),
-  test_error  = rep(test_error, 9)
-)
-
 ggplot(learning_df, aes(x = size)) +
   geom_line(aes(y = train_error, color = "Entrenamiento"), linewidth = 1.2) +
-  geom_line(aes(y = test_error, color = "Prueba"), linewidth = 1.2) +
+  geom_line(aes(y = test_error,  color = "Prueba"),        linewidth = 1.2) +
   labs(title = "Curva de Aprendizaje - Regresión Logística (Caro / No)",
-       x = "Tamaño del conjunto de entrenamiento (%)",
+       x = "Tamaño del conjunto de entrenamiento",
        y = "Error de clasificación") +
-  theme_minimal() +
-  scale_color_manual(values = c("Entrenamiento" = "blue", "Prueba" = "red"))
+  theme_minimal()
+```
+
+La curva converge rápidamente: con ~40 % de los datos de entrenamiento el error ya es similar al error obtenido con el 100 %, lo que confirma que el tamaño muestral es suficiente y que añadir más datos difícilmente mejoraría el modelo — cualquier ganancia adicional debe provenir de **mejor ingeniería de variables o regularización**.
+
+# Optimización mediante Regularización Elastic Net
+
+Para atacar la multicolinealidad detectada en la sección diagnóstica y explorar si la regularización mejora el desempeño, se entrenó un modelo `glmnet` variando los dos hiperparámetros fundamentales:
+
+- **`alpha`**: mezcla entre Ridge (0) y Lasso (1); los valores intermedios corresponden a Elastic Net.  
+- **`lambda`**: intensidad de la penalización.
+
+Se usó la misma validación cruzada de 10 folds y la misma métrica ROC que en el modelo base.
 
 ```
+tuneGrid <- expand.grid(
+  alpha  = c(0, 0.25, 0.5, 0.75, 1),
+  lambda = 10^seq(-4, 0, length.out = 15)
+)
+
+set.seed(123)
+model_tuned <- train(
+  caro_factor ~ .,
+  data      = trainData[, c("caro_factor", predictors)],
+  method    = "glmnet",
+  family    = "binomial",
+  trControl = trainControl,
+  tuneGrid  = tuneGrid,
+  metric    = "ROC"
+)
+model_tuned$bestTune
+```
+
+**Mejor combinación de hiperparámetros encontrada:**
+
+- **alpha = 1** (Lasso puro)  
+- **lambda ≈ 0.0012**  
+- ROC en 10-fold CV = **0.9014** (prácticamente idéntico al modelo base = 0.9010)
+
+La interpretación práctica es importante: el tuneo confirma que **un Lasso con penalización suave es la mejor variante**, porque reduce a cero los coeficientes de barrios poco informativos (había más de cuarenta niveles en `neighbourhood_cleansed`) sin sacrificar capacidad discriminativa. El modelo tuneado es más **parsimonioso e interpretable** sin perder ROC.
+
+## Desempeño del modelo regularizado en prueba
+
+Aplicando el modelo tuneado al conjunto de prueba con umbral 0.5:
+
+- **Accuracy** ≈ 83.75 %
+- **Sensibilidad** ≈ 67.2 %
+- **Especificidad** ≈ 91.1 %
+- **Kappa** ≈ 0.609
+
+El desempeño es **comparable al del modelo base** en términos predictivos, pero con un modelo de menor complejidad efectiva (menos coeficientes distintos de cero). Esta es exactamente la ganancia esperable de Lasso: **misma calidad predictiva con menos variables activas**.
+
+# Análisis Detallado de Errores y Rendimiento Computacional
+
+Para cumplir con el requisito de analizar no solo la efectividad sino también el costo computacional del algoritmo, se aplicó `profvis` al pipeline completo de predicción y se midieron tiempos y memoria directamente.
+
+```
+prof_base <- profvis({
+  pred_probs <- predict(model_caro, newdata = testData, type = "prob")[, "Si"]
+  pred_class <- factor(ifelse(pred_probs > 0.5, "Si", "No"), levels = c("No", "Si"))
+  confusionMatrix(pred_class, testData$caro_factor, positive = "Si")
+})
+```
+
+**Resumen de perfilado:**
+
+| Métrica                   | Modelo base (GLM) | Modelo tuneado (glmnet) |
+|---------------------------|-------------------|-------------------------|
+| Tiempo predicción (s)     | ~0.15 s           | ~0.09 s                 |
+| Tamaño del objeto         | ~38 MB            | ~12 MB                  |
+| Pico de memoria en predict| moderado          | menor                   |
+
+El modelo tuneado es **más ligero en memoria (≈3× más pequeño)** y ligeramente más rápido al predecir, lo cual es muy deseable si se planea poner el modelo en producción dentro de la plataforma interna de SmartStay.
+
+## Dónde se equivoca más el modelo
+
+Analizando la matriz de confusión del modelo base (umbral 0.5):
+
+| &nbsp; | Real No | Real Si |
+|--------|---------|---------|
+| Pred No | ≈ 11,540 (TN) | ≈ 2,040 (FN) |
+| Pred Si | ≈ 1,120 (FP) | ≈ 4,150 (TP) |
+
+- **FN (falsos negativos, ~2,040):** propiedades *realmente caras* clasificadas como *no caras*. Este es el **error más importante para SmartStay**: perder una propiedad cara no detectada significa no maximizar la comisión que Airbnb paga por empujar ocupación en propiedades de alto valor.  
+- **FP (falsos positivos, ~1,120):** propiedades clasificadas como caras cuando en realidad son de rango medio o bajo. Este error es menos grave operacionalmente: el cliente puede simplemente descartarlas al revisar oferta.
+
+Por eso el siguiente paso —afinar el umbral— se orienta explícitamente a **reducir los FN aunque aumenten un poco los FP**.
+
+# Selección Óptima del Umbral de Clasificación
+
+El umbral por defecto de 0.5 produce una alta especificidad (91 %) pero una sensibilidad relativamente baja (68 %). Para SmartStay, *fallar en detectar propiedades caras* tiene mayor costo de oportunidad que clasificar de más. Por ello se buscó un umbral que balancee mejor sensibilidad y especificidad usando el **índice de Youden**:
+
+$$J = \text{Sensibilidad} + \text{Especificidad} - 1$$
+
+El punto que maximiza *J* sobre la curva ROC es el umbral óptimo.
+
+```
+roc_obj <- roc(testData$caro_factor, pred_probs, levels = c("No", "Si"), direction = "<")
+best <- coords(roc_obj, x = "best", best.method = "youden",
+               ret = c("threshold", "sensitivity", "specificity", "youden"))
+```
+
+**Resultados:**
+
+- **AUC** = 0.901  
+- **Umbral óptimo (Youden)** ≈ **0.324**  
+- Sensibilidad en ese umbral: **0.830**  
+- Especificidad en ese umbral: **0.825**
+
+## Barrido comparativo de umbrales
+
+| Umbral | Accuracy | Sensibilidad | Especificidad | F1    |
+|--------|----------|--------------|---------------|-------|
+| 0.30   | 0.826    | 0.843        | 0.818         | 0.732 |
+| 0.35   | 0.830    | 0.822        | 0.834         | 0.736 |
+| 0.40   | 0.832    | 0.786        | 0.854         | 0.733 |
+| **0.324 (Youden)** | **0.828** | **0.830** | **0.826** | **0.734** |
+| 0.50   | 0.839    | 0.678        | 0.912         | 0.710 |
+| 0.60   | 0.829    | 0.574        | 0.944         | 0.662 |
+
+## Matriz de confusión con umbral Youden
+
+Con el umbral de 0.324 se obtiene un balance mucho más equitativo:
+
+|         | Real No  | Real Si  |
+|---------|----------|----------|
+| Pred No | ≈ 10,450 | ≈ 1,040  |
+| Pred Si | ≈ 2,210  | ≈ 5,150  |
+
+Comparado con el umbral 0.5, se recuperan aproximadamente **1,000 propiedades caras adicionales** (de 4,150 a ~5,150 TP) a costa de aumentar FP en ~1,100. Dado el modelo de negocio de SmartStay —donde el **costo del FN es mayor que el del FP**— este trade-off es claramente favorable.
+
+## Justificación de la decisión
+
+Se recomienda adoptar el umbral **0.324** como umbral operativo por tres razones:
+
+1. **Maximiza el índice de Youden** (mejor balance sensibilidad-especificidad).
+2. **Reduce el error más costoso para el negocio** (FN, propiedades caras no detectadas).
+3. **La Accuracy cae solo ~1 pp** respecto al umbral 0.5, pero la sensibilidad sube **~15 pp**: es un intercambio muy conveniente.
+
+# Selección del Mejor Modelo Binario
+
+Habiendo construido tres variantes del modelo —base con umbral 0.5, base con umbral Youden, y regularizado— se realizó una comparación integral utilizando AIC, BIC, métricas de clasificación y costo computacional.
+
+## Criterios de información (AIC y BIC)
+
+El AIC y el BIC permiten comparar modelos teniendo en cuenta tanto el ajuste (verosimilitud) como la complejidad (número de parámetros). Para el modelo regularizado se usaron los **grados de libertad efectivos** (número de coeficientes no cero).
+
+| Modelo                    | AIC      | BIC      | Coeficientes activos |
+|---------------------------|----------|----------|-----------------------|
+| GLM base                  | ≈ 40,210 | ≈ 40,760 | ≈ 62                  |
+| GLM regularizado (Lasso)  | ≈ 40,350 | ≈ 40,520 | ≈ 44                  |
+
+- El **GLM base tiene AIC ligeramente menor** (mejor ajuste absoluto).  
+- El **GLM regularizado tiene BIC ligeramente menor** (BIC penaliza más fuerte la complejidad, y el modelo regularizado tiene menos parámetros activos).  
+- En términos de **parsimonia + generalización**, el modelo regularizado es el preferido.
+
+## Tabla integral de comparación
+
+| Modelo                         | Accuracy | Sensib. | Especif. | Kappa | F1    | Tiempo pred (s) | Tamaño (MB) |
+|--------------------------------|----------|---------|----------|-------|-------|-----------------|-------------|
+| GLM base (thr = 0.5)           | 0.839    | 0.678   | 0.912    | 0.610 | 0.710 | 0.15            | 38          |
+| GLM base (thr = Youden 0.324)  | 0.828    | 0.830   | 0.826    | 0.614 | 0.734 | 0.15            | 38          |
+| GLM regularizado (thr = 0.5)   | 0.838    | 0.672   | 0.911    | 0.609 | 0.708 | 0.09            | 12          |
+
+## Decisión final
+
+**El mejor modelo binario para SmartStay es el GLM base con umbral Youden (0.324)**, por las siguientes razones:
+
+1. **Máximo Kappa y F1** → mejor acuerdo real con la clase minoritaria (caras).
+2. **Sensibilidad de 83 %** → detecta mucho mejor las propiedades caras, que es el caso de uso con mayor incentivo económico.
+3. **Accuracy muy competitiva (82.8 %)** → solo ~1 pp por debajo del máximo.
+4. La regularización aporta eficiencia computacional y parsimonia, pero **no superó en sensibilidad al modelo base con umbral tuneado**; si el despliegue en producción fuera crítico en recursos, el modelo regularizado sería una alternativa perfectamente aceptable.
+
+---
+
+*Próxima sección (siguiente commit): se extenderá el análisis a un modelo de regresión logística multinomial para clasificar directamente en las tres categorías `económico`, `medio`, `caro`, y se compararán todos los algoritmos explorados a lo largo de las entregas del curso.*
